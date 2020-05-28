@@ -34,27 +34,19 @@ import java.io.*;
 import java.util.List;
 import java.util.*;
 
-/**
- *
- * Class to extract tabular data from a PDF.
- * Works by making a first pass of the page to group all nearby text items
- * together, and then inferring a 2D grid from these regions. Each table cell
- * is then extracted using a PDFTextStripperByArea object.
- *
- * Works best when
- * headers are included in the detected region, to ensure representative text
- * in every column.
- *
- * Based upon DrawPrintTextLocations PDFBox example
- * (https://svn.apache.org/viewvc/pdfbox/trunk/examples/src/main/java/org/apache/pdfbox/examples/util/DrawPrintTextLocations.java)
- *
- * @author Beldaz
- */
-public class PDFTableStripper extends PDFTextStripper  // AM I DOING IT WRONG? SHOULD I RENAME THE NEW CLASS?
+
+// THIS IS THE MAIN CLASS
+
+public class PDFTableStripper extends PDFTextStripper
 {
 
+    public static class Details{
+        String[] Tables;
+        String Text;
+        double[][][] CoordOfText;
+        double[] HeightText;
 
-
+    }
     /**
      * This will print the documents data, for each table cell.
      *
@@ -64,251 +56,126 @@ public class PDFTableStripper extends PDFTextStripper  // AM I DOING IT WRONG? S
      */
     public static void main(String[] args) throws IOException
     {
+        // Function to extract all data
+        Details D = getDetails();
+
+    }
+
+    public static Details getDetails(){
         double[] row_coordinates = new double[0];
         double[] row_heights = new double[0];
         int[] row_page = new int[0];
         try (PDDocument document = PDDocument.load(new File("/home/theperson/IdeaProjects/proj1/src/com/company/Invoice.pdf")))
         {
-            final double res = 72; // PDF units are at 72 DPI
+
+            // ****************** PART 1 ******************
+            // Extract TEXT data from each page on the pdf
+
+            // PDF units are at 72 DPI
+            // This number changes with the quality of the pdf
+            final double res = 72;
             PDFTableStripper stripper = new PDFTableStripper();
             stripper.setSortByPosition(true);
 
-            // Choose a region in which to extract a table (here a 6"wide, 9" high rectangle offset 1" from top left of page)
+            // 9x9 inch area is considered on each page
+            // Overflow throws no error
             stripper.setRegion(new Rectangle((int) Math.round(0.0*res), (int) Math.round(1*res), (int) Math.round(9*res), (int) Math.round(9.0*res)));
 
-            // Repeat for each page of PDF
-
-            for (int page = 0; page < document.getNumberOfPages(); ++page)
-            {
-                System.out.println("Page " + page);
+            int no_of_rows = 0;
+            // Iterating through each page of the pdf
+            for (int page = 0; page < document.getNumberOfPages(); ++page) {
                 PDPage pdPage = document.getPage(page);
                 Rectangle2D[][] regions = stripper.extractTable(pdPage);
-                row_coordinates = new double[stripper.getRows()];
-                row_heights = new double[stripper.getRows()];
-                row_page = new int[stripper.getRows()];
-                for(int c=0; c<stripper.getColumns(); ++c) {
-                    System.out.println("*******************************************************\n\n\n"+"Column " + c );
-                    for(int r=0; r<stripper.getRows(); ++r) {
-                        Rectangle2D region = regions[c][r];
-                        row_coordinates[r] = region.getMinY();
-                        row_heights[r] = region.getHeight();
-                        row_page[r] = page;
-                        System.out.println("Row " + r + "_____________________________________Region: "+ region);
-                        System.out.println("___________________________________________" + row_coordinates[r]);
-                        System.out.println(stripper.getText(r, c));
-
-                    }
-                }
-
+                no_of_rows = no_of_rows+stripper.getRows();
             }
 
-// *********************************************************************************************************************
-            System.out.println("THIS PART CORRECTLY FORMS COLUMNS");
+            row_coordinates = new double[no_of_rows];
+            row_heights = new double[no_of_rows];
+            row_page = new int[no_of_rows];
+
+            int row_pointer = 0;
+            for (int page = 0; page < document.getNumberOfPages(); ++page) {
+                PDPage pdPage = document.getPage(page);
+                Rectangle2D[][] regions = stripper.extractTable(pdPage);
+
+                // Iterating through each row
+                for(int r=0; r<stripper.getRows(); ++r) {
+                    // Iterating through each column
+                    for(int c=0; c<stripper.getColumns(); ++c) {
+                        int R = row_pointer;
+                        Rectangle2D region = regions[c][r];
+                        row_coordinates[R] = region.getMinY();
+                        row_heights[R] = region.getHeight();
+                        row_page[R] = page;
+                    }
+                    row_pointer = row_pointer +1;
+                }
+            }
+
+            double[] row_heights_copy = row_heights;
+
+            // ****************** PART 2 ******************
+            // Using row coordinates calculated above, divide the pdf into rectangles
+            // Extract all contents from each rectangle , and partition the content into columns
+            // i is row number; c is column number
+
+            int highest_actual_num_of_col = 0;
             int r = 0;
             double[][][] row_cooord_height = new double[row_coordinates.length][15][2];
             String[][] row_column_wise_content = new String[row_coordinates.length][15];
+
+            // Iterating through all the rows (rectangles)
             for (int i = 0; i< row_coordinates.length; i++){
 
+                int actual_num_of_col = 0;
                 stripper = new PDFTableStripper();
                 stripper.setSortByPosition(true);
-
-
-                // Choose a region in which to extract a table (here a 6"wide, 9" high rectangle offset 1" from top left of page)
                 stripper.setRegion(new Rectangle((int) Math.round(0.0*res), (int) Math.round(row_coordinates[i]), (int) Math.round(9*res), (int) Math.round(row_heights[i])));
 
-                // Repeat for each page of PDF
-
                 int page = row_page[i];
-//                for (int page = 0; page < document.getNumberOfPages(); ++page)
-//                {
-                System.out.println("Page " + page);
                 PDPage pdPage = document.getPage(page);
                 Rectangle2D[][] regions = stripper.extractTable(pdPage);
-//                    row_coordinates = new double[stripper.getRows()];
-                //int r =0;
-                for(int c=0; c<stripper.getColumns(); ++c) {
-                    System.out.println("*******************************************************\n\n\n"+"Column " + c );
 
-//                        for(int r=0; r<stripper.getRows(); ++r) {
+                // Iterating through all the columns ing each row(rectangle)
+                for(int c=0; c<stripper.getColumns(); ++c) {
+
                     Rectangle2D region = regions[c][r];
                     row_coordinates[r] = region.getMinY();
-                    System.out.println("Row"+i+"_____________________________________Region: "+ region);
-                    System.out.println("___________________________________________" + row_coordinates[r]);
                     String text = stripper.getText(r, c);
                     row_column_wise_content[i][c] = text;
-                    System.out.println(text);
-                    row_cooord_height[i][c][0] = region.getMinX();
-                    row_cooord_height[i][c][1] = region.getMaxX();
-
-
-//                        }
-//                    }
-
-                }
-            }
-
-            int highest_actual_num_of_col = 0;
-            for (int i = 0; i<row_coordinates.length; i++){
-                System.out.println("Row: " + i + "-----------------------------------------------------------");
-                int actual_num_of_col = 0;
-                for (int c = 0; c<10; c++){
-                    System.out.println("Column: "+ c);
-                    System.out.println("-------------------------------------"+ row_column_wise_content[i][c]);
                     if (row_column_wise_content[i][c] != null){
                         actual_num_of_col = actual_num_of_col +1;
                     }
-                    // for (int e = 0; e<2; e++){
-                    System.out.println(row_cooord_height[i][c][0] + "--------" + row_cooord_height[i][c][1] );
-
-                    // }
+                    row_cooord_height[i][c][0] = region.getMinX();
+                    row_cooord_height[i][c][1] = region.getMaxX();
                 }
                 if (actual_num_of_col>highest_actual_num_of_col){
                     highest_actual_num_of_col = actual_num_of_col;
                 }
             }
-            //Throughout a column x is same
-            //for (int ){}
 
-            //
-            double[][][] table =  new double[10][row_coordinates.length][highest_actual_num_of_col+1];
-
-//            for (int i=0; i<row_coordinates.length)
-
-
-
-
-            // Grouping rows together, that are a part of a table i.e. assigning each row to a table based on partions inside a row
-
-
-            double[][] row_partitions = new double[row_coordinates.length][highest_actual_num_of_col+1];
-
-            for (int i = 0; i<row_coordinates.length; i++){
-                for (int j=0; j<highest_actual_num_of_col; j++){
-
-                    double x1 = row_cooord_height[i][j][0];
-                    double x2 = row_cooord_height[i][j][1];
-
-                    boolean found1 = false;
-                    boolean found2 = false;
-
-                    int first_null_elem = 0;
-                    for (int k=0; k<highest_actual_num_of_col;k++){
-
-                        if (row_partitions[i][k] == 0.0){
-                            first_null_elem = k;
-                            break;
-                        }
-
-                        if (row_partitions[i][k] == x1){
-                            found1 = true;
-                        }
-                        if (row_partitions[i][k] == x2){
-                            found2 = true;
-                        }
-
-                        // if x1 and x2 are both present
-                        if (found1 && found2){
-                            break;
-                        }
-                    }
-
-                    if (!found1 && x1!=0.0){
-                        System.out.println("@@@@@ "+first_null_elem);
-                        System.out.println(x1);
-                        row_partitions[i][first_null_elem] = x1;
-                        first_null_elem = first_null_elem + 1;
-                    }
-                    if (!found2 && x2!=0.0){
-                        System.out.println("***** "+first_null_elem);
-                        System.out.println(x2);
-                        row_partitions[i][first_null_elem] = x2;
-                    }
-
-                    //row_partitions[i][j] = row_cooord_height[i][j][0]
-                }
-
-            }
-
-            System.out.println("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^");
-            for (int i = 0; i<row_coordinates.length; i++) {
-                System.out.println("Row: " + i);
-                for (int j = 0; j < highest_actual_num_of_col; j++) {
-                    System.out.println(row_partitions[i][j]);
-                }
-            }
-
-            int rows_covered = 1;
-
-//            double[][] table0= new double[row_coordinates.length][row_coordinates.length];
-            int current_table = 0;
-            int row_num_in_table = 0;
-//            while (rows_covered+1<row_coordinates.length){
-//                System.out.println(rows_covered+" *********************** "+row_coordinates.length);
-//                System.out.println("Table no: "+ current_table + " Row no: " + row_num_in_table);
-//
-//
-//                int R = rows_covered;
-//                for (int i = R+1; i<row_coordinates.length; i++){
-//                    System.out.println("Table no: "+ current_table + " -------------------------- Row no: " + row_num_in_table);
-//                    System.out.println("Row no: " + i);
-//                    boolean same_tabel_as_above_row = true;
-//                    for (int j = 0; j<highest_actual_num_of_col; j++){
-//                        double current_elem = row_partitions[i][j];
-//                        boolean no_match_For_element = true;
-//                        for (int k =0; k<highest_actual_num_of_col;k++){
-//                            double diff = current_elem-row_partitions[i-1][k];
-//                            if (diff<5 && diff>-5 ){
-//                                no_match_For_element = false;
-//                                break;
-//                            }
-//
-//                        }
-//                        if (no_match_For_element){
-//                            same_tabel_as_above_row = false;
-//                            break;
-//                        }
-//                    }
-//                    if (same_tabel_as_above_row){
-//                        table0[current_table][row_num_in_table] = i;
-//                        row_num_in_table = row_num_in_table + 1;
-//                        System.out.println("::::::::::::::::::::::"+ same_tabel_as_above_row+ ":::::::::" + row_num_in_table);
-//
-//
-//                    }
-//                    else{
-//                        table0[current_table+1][0] = i;
-//
-//                        current_table = current_table + 1;
-//                        row_num_in_table = 1;
-//                    }
-//                    rows_covered = rows_covered +1;
-//                    System.out.println(rows_covered);
-//                }
-////                rows_covered = R;
-//                System.out.println("&&&&&&&&&&&&&&&&&&"+ rows_covered);
-//                //rows_covered = rows_covered+1;
-//            }
+            // ****************** PART 3 ******************
+            // Finding the Heading rows(start and end)
+            // i.e. finding rows with certain words
 
             int[] rows_with_headings__start = new int[row_coordinates.length];
             int[] rows_with_headings__end = new int[row_coordinates.length];
             int heading_found__start_pointer = 0;
             int heading_found__end_pointer = 0;
+            // Iterating through all rows
             for (int i = 0; i<row_coordinates.length; i++){
                 boolean heading_found__start = false;
                 boolean heading_found__end = false;
+                // Iterating through all columns
                 for (int j = 0; j<highest_actual_num_of_col; j++){
                     String content = row_column_wise_content[i][j];
-                    // System.out.println(content);
+                    // Only considering those cells that are not empty
                     if (content != null){
                         if( content.contains("Sl.") || content.contains("Description") || content.contains("Title")){
-                            System.out.println(content);
-                            System.out.println("found beginning");
                             heading_found__start = true;
                             break;
                         }
                         else if(content.contains("Total") || content.contains("TOTAL")){
-                            System.out.println(content);
-                            System.out.println("found end");
                             heading_found__end = true;
                             break;
                         }
@@ -322,81 +189,29 @@ public class PDFTableStripper extends PDFTextStripper  // AM I DOING IT WRONG? S
                     rows_with_headings__end[heading_found__end_pointer] = i;
                     heading_found__end_pointer++;
                 }
-
-            }
-
-            int[][] table0= new int[heading_found__start_pointer][row_coordinates.length];
-            for (int i = 0; i<heading_found__start_pointer; i++){
-                System.out.println();
-                for (int j =rows_with_headings__start[i]; j<=rows_with_headings__end[i]; j++){
-                    System.out.println(i + "***" + j);
-                    String S = "";
-                    for (int k=0; k<highest_actual_num_of_col; k++){
-                        if (row_column_wise_content[j][k] !=null){
-                            //System.out.println(row_column_wise_content[j][k]);
-                            S = S+row_column_wise_content[j][k];
-
-                        }
-                    }
-                    System.out.println(S);
-                    table0[i][j-rows_with_headings__start[i]] = j;
-                }
             }
 
             System.out.println("%%%%%%%%%%%%%%%%%%%%%%");
-//            for (int i = 0; i< heading_found__start_pointer; i++){
-//
-//                stripper = new PDFTableStripper();
-//                stripper.setSortByPosition(true);
-//
-//                int start_num = rows_with_headings__start[i];
-//                int end_num = rows_with_headings__end[i];
-//                // Choose a region in which to extract a table (here a 6"wide, 9" high rectangle offset 1" from top left of page)
-//                stripper.setRegion(new Rectangle((int) Math.round(0), (int) Math.round(0.0*res), (int) Math.round(9*res), (int) Math.round(6)));
-//
-//                // Repeat for each page of PDF
-//
-//                int page = row_page[i];
-////                for (int page = 0; page < document.getNumberOfPages(); ++page)
-////                {
-//                System.out.println("Page " + page + " start "+ start_num + " end " +end_num);
-//                PDPage pdPage = document.getPage(page);
-//                Rectangle2D[][] regions = stripper.extractTable(pdPage);
-////                    row_coordinates = new double[stripper.getRows()];
-//                //int r =0;
-//                System.out.println(stripper.getColumns());
-//                for(int c=0; c<stripper.getColumns(); ++c) {
-//                    System.out.println("*******************************************************\n\n\n"+"Column " + c );
-//
-//                    for(r=0; r<stripper.getRows(); ++r) {
-//                        Rectangle2D region = regions[c][r];
-//                        row_coordinates[r] = region.getMinY();
-//                        System.out.println("Row"+i+"_____________________________________Region: "+ region);
-//                        System.out.println("___________________________________________" + row_coordinates[r]);
-//                        String text = stripper.getText(r, c);
-//    //                    row_column_wise_content[i][c] = text;
-//                        System.out.println(text);
-////                    row_cooord_height[i][c][0] = region.getMinX();
-////                    row_cooord_height[i][c][1] = region.getMaxX();
-//
-//
-//                        }
-////                    }
-//
-//                }
-//            }
 
-            int i = 13;
-            int j = 22;
+            // ****************** PART 4 ******************
+            // Creating the array of strings for all tables
+            // Each string element has the rows separated by "^^^^^^" , which is in turn separated by "<<<>>>"
 
-            double start_coord = row_coordinates[13];
-            double end_coord =row_coordinates[22];
-            for (i =0; i<heading_found__start_pointer; i++) {
-                System.out.println("Table: "+ i+"^^^^^^^^^^^^^^^^^^^^^^^^^^^^");
-                System.out.println(rows_with_headings__start[i]);
-                System.out.println(rows_with_headings__end[i]);
+            // Keeping a track of the rows that are already a part of some table or the other, is important
+            boolean[] rows_in_table = new boolean[row_coordinates.length];
+            double start_coord;
+            double end_coord;
+            String[] arrayOfTableContants = new String[heading_found__start_pointer];
+
+            // Iterating through all tables
+            for (int i =0; i<heading_found__start_pointer; i++) {
                 start_coord = row_coordinates[rows_with_headings__start[i]];
-                end_coord = row_coordinates[rows_with_headings__end[i]];
+                end_coord = row_coordinates[rows_with_headings__end[i + 1]];
+
+                for (int l =rows_with_headings__start[i]; l<=rows_with_headings__end[i]; l++){
+                    rows_in_table[l] = true;
+                }
+
                 double height = end_coord - start_coord;
                 stripper.setRegion(new Rectangle((int) Math.round(0.0 * res), (int) Math.round(start_coord), (int) Math.round(9 * res), (int) Math.round(height)));
 
@@ -410,93 +225,59 @@ public class PDFTableStripper extends PDFTextStripper  // AM I DOING IT WRONG? S
                 row_page = new int[stripper.getRows()];
 
 
+                // Iterating through all column of the table
                 for (int c = 0; c < stripper.getColumns(); ++c) {
-                    table_contents = table_contents + "Column: " + c + " ________________________________________\n";
-
-                    // System.out.println("*******************************************************\n\n\n" + "Column " + c);
-
+                    table_contents = table_contents +  "^^^" + "^^^\n";     // "Column: " + c + " ________________________________________\n";
+                    // Iterating through all the rows of the table
                     for (r = 0; r < stripper.getRows(); ++r) {
-
-                        table_contents = table_contents + "______Row: "+ r + "\n";
+                        table_contents = table_contents + "<<<" + ">>>\n";     //"______Row: "+ r + "\n";
                         Rectangle2D region = regions[c][r];
                         row_coordinates[r] = region.getMinY();
                         row_heights[r] = region.getHeight();
                         row_page[r] = page;
+                        // Appending content to the content list
                         table_contents = table_contents + stripper.getText(r, c);
-//                        System.out.println("Row " + r + "_____________________________________Region: " + region);
-//                        System.out.println("___________________________________________" + row_coordinates[r]);
-//                        System.out.println(stripper.getText(r, c));
-
-
                     }
                 }
-
                 System.out.println(table_contents);
-
+                arrayOfTableContants[i] = table_contents;
             }
 
+            double[][][] row_coord_height_0 = new double[no_of_rows][15][2];
+            double[] row_heights_0 = new double[no_of_rows];
+            String C = "";
+            int row_index = 0;
+            for (int i = 0; i<no_of_rows; i++){
+                if (!rows_in_table[i]){
+                    String S = "";
+                    for (int j = 0; j<15; j++){
+                        S = S + "<<<>>>\n" + row_column_wise_content[i][j];
+                        row_coord_height_0[row_index][j][0] = row_cooord_height[i][j][0];
+                        row_coord_height_0[row_index][j][1] = row_cooord_height[i][j][1];
+                    }
+                    C = C + "^^^^^^\n" +S;
+                    double h = row_heights_copy[i];
+                    row_heights_0[row_index] = h;
+                    row_index = row_index + 1;
+                }
+            }
+            System.out.println(C);
 
+            Details D = new Details();
+            D.Tables = arrayOfTableContants;
+            D.Text = C;
+            D.CoordOfText = row_coord_height_0;
+            D.HeightText = row_heights_0;
 
+            return D;
 
-
-//            File file = new File("/home/theperson/Downloads/test_doc.pdf");
-//            PDDocument document2 = PDDocument.load(file);
-//
-//            //Retrieving a page of the PDF Document
-//            PDPage page = document2.getPage(0);
-//
-//            //Instantiating the PDPageContentStream class
-//            PDPageContentStream contentStream = new PDPageContentStream(document2, page);
-//
-//            //Setting the non stroking color
-//            contentStream.setNonStrokingColor(Color.red);
-//
-//            //Drawing a rectangle
-////            contentStream.addRect(0, 0, 5, 5);
-//            for (int i = 0; i<row_coordinates.length; i++) {
-////                System.out.println("Row: " + i);
-//                for (int j = 0; j < highest_actual_num_of_col; j++) {
-////                    System.out.println(row_partitions[i][j]);
-//                    contentStream.addRect((float) (row_partitions[i][j]-2.5), (float) (row_coordinates[i]-2.5), 5,5 );
-//                    contentStream.addRect((float) (row_partitions[i][j]-2.5), (float) (row_coordinates[i]+row_heights[i]-2.5), 5,5 );
-//                }
-//                if (i%2==0){
-//                    contentStream.setNonStrokingColor(Color.yellow);
-//                    contentStream.fill();
-//                }
-//                else{
-//                    contentStream.setNonStrokingColor(Color.blue);
-//                    contentStream.fill();
-//                }
-//            }
-//
-//
-//            //Drawing a rectangle
-//            contentStream.fill();
-//
-//            System.out.println("rectangle added");
-//
-//            //Closing the ContentStream object
-//            contentStream.close();
-//
-//            //Saving the document
-//            File file1 = new File("/home/theperson/Downloads/test_doc3.pdf");
-//            document2.save(file1);
-//
-//            //Closing the document
-//            document2.close();
-//
-//            System.out.println(r);
-
-
-
-
-
+        } catch (IOException e) {
+            e.printStackTrace();
 
         }
+        Details D = new Details();
+        return D;
     }
-
-
 
     /*
      *  Used in methods derived from DrawPrintTextLocations
@@ -697,7 +478,7 @@ public class PDFTableStripper extends PDFTextStripper  // AM I DOING IT WRONG? S
         for(Rectangle2D box: boxes) {
             Interval x = new Interval(box.getMinX(), box.getMaxX());
             Interval y = new Interval(box.getMinY(), box.getMaxY());
-            System.out.println("row"+ r);
+//            System.out.println("row"+ r);
             if (r == 0){
                 File file = new File("/home/theperson/Downloads/test_doc.pdf");
                 PDDocument document = PDDocument.load(file);
@@ -706,7 +487,7 @@ public class PDFTableStripper extends PDFTextStripper  // AM I DOING IT WRONG? S
                 PDPage page = document.getPage(0);
 
                 //Instantiating the PDPageContentStream class
-                PDPageContentStream contentStream = new PDPageContentStream(document, page);
+                PDPageContentStream contentStream = new PDPageContentStream(document, page, PDPageContentStream.AppendMode.OVERWRITE, true);
 
                 //Setting the non stroking color
                 contentStream.setNonStrokingColor(Color.red);
@@ -717,7 +498,7 @@ public class PDFTableStripper extends PDFTextStripper  // AM I DOING IT WRONG? S
                 //Drawing a rectangle
                 contentStream.fill();
 
-                System.out.println("rectangle added");
+//                System.out.println("rectangle added");
 
                 //Closing the ContentStream object
                 contentStream.close();
@@ -729,9 +510,9 @@ public class PDFTableStripper extends PDFTextStripper  // AM I DOING IT WRONG? S
                 //Closing the document
                 document.close();
 
-                System.out.println(r);
+//                System.out.println(r);
             }
-            System.out.println(box+"++++++++++++++++++++++++" + x +"**" + y);
+//            System.out.println(box+"++++++++++++++++++++++++" + x +"**" + y);
             r = r+1;
             Interval.addTo(x, columns);
             Interval.addTo(y, rows);
@@ -747,7 +528,7 @@ public class PDFTableStripper extends PDFTextStripper  // AM I DOING IT WRONG? S
             int j=0;
             for(Interval row: rows) {
                 regions[nCols-i-1][nRows-j-1] = new Rectangle2D.Double(column.start, row.start, column.end - column.start, row.end - row.start);
-                System.out.println(regions[nCols-i-1][nRows-j-1]);
+//                System.out.println(regions[nCols-i-1][nRows-j-1]);
                 ++j;
             }
             ++i;
