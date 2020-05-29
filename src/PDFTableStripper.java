@@ -96,6 +96,7 @@ public class PDFTableStripper extends PDFTextStripper
             row_coordinates = new double[total_no_of_rows];
             row_heights = new double[total_no_of_rows];
             row_page = new int[total_no_of_rows];
+            double[][] row_coordinates_y = new double[total_no_of_rows][2];
 
             int R = 0;
             // Extract data from each page on the pdf
@@ -111,6 +112,7 @@ public class PDFTableStripper extends PDFTextStripper
                         Rectangle2D region = regions[c][r];
                         row_coordinates[R] = region.getMinY();
                         row_heights[R] = region.getHeight();
+
                         row_page[R] = page;
                     }
                     R +=1;
@@ -276,12 +278,16 @@ public class PDFTableStripper extends PDFTextStripper
             double end_coord;
             int i;
 
+            double[][] TableY1Y2 = new double[heading_found__start_pointer][2];
+            double[][] TableX1X2 = new double[heading_found__start_pointer][2];
             // Iterating through each pair of headings
             // i.e. iterating through all tables
             for (i =0; i<heading_found__start_pointer; i++) {
                 start_coord = row_coordinates[rows_with_headings__start[i]];
                 end_coord = row_coordinates[rows_with_headings__end[i+1]];
                 double height = end_coord - start_coord;
+                TableX1X2[i][0] = start_coord;
+                TableX1X2[i][1] = end_coord;
                 stripper.setRegion(new Rectangle((int) Math.round(0.0 * res), (int) Math.round(start_coord), (int) Math.round(9 * res), (int) Math.round(height)));
 
                 String table_contents = "";
@@ -340,6 +346,7 @@ public class PDFTableStripper extends PDFTextStripper
             D.Tables = Tables;
             D.Xcoordinates = Xcoordinates;
             D.RowPartitions = RowPartitions;
+            D.TableVerticalCoord = TableX1X2;
 
             return D;
         }
@@ -352,6 +359,7 @@ public class PDFTableStripper extends PDFTextStripper
         String[] Tables;
         String Xcoordinates;
         String RowPartitions;
+        double[][] TableVerticalCoord; // Horizontal is same for even page, see : PART 1
 
     }
 
