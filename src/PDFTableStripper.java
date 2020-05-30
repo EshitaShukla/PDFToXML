@@ -1,20 +1,3 @@
-/*
- * Copyright 2017 Beldaz (https://github.com/beldaz)
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 import org.apache.fontbox.util.BoundingBox;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -54,8 +37,8 @@ public class PDFTableStripper extends PDFTextStripper
     {
         // Function to get all data from the pdf
         Details D0 = getDetails("/home/theperson/Downloads/traprange-master/_Docs/Invoice_2.pdf");
-        System.out.println("Followingh is the content of the 1st table: \n" + D0.Tables[0]);
-        //System.out.println("Folloeing is the text on the table: \n" + D0.Text);
+        // System.out.println("Followingh is the content of the 1st table: \n" + D0.Tables[0]);
+        // System.out.println("Folloeing is the text on the table: \n" + D0.Text);
 
     }
 
@@ -84,7 +67,6 @@ public class PDFTableStripper extends PDFTextStripper
             int total_no_of_rows = 0;
             for (int page = 0; page < document.getNumberOfPages(); ++page)
             {
-//                System.out.println("Page " + page);
                 PDPage pdPage = document.getPage(page);
                 Rectangle2D[][] regions = stripper.extractTable(pdPage);
 
@@ -102,7 +84,6 @@ public class PDFTableStripper extends PDFTextStripper
             // Extract data from each page on the pdf
             for (int page = 0; page < document.getNumberOfPages(); ++page)
             {
-//                System.out.println("Page " + page);
                 PDPage pdPage = document.getPage(page);
                 Rectangle2D[][] regions = stripper.extractTable(pdPage);
 
@@ -260,7 +241,7 @@ public class PDFTableStripper extends PDFTextStripper
 
                         }
                     }
-                    System.out.println(j+ "___" +  S);
+//                    System.out.println(j+ "___" +  S);
                     table0[i][j-rows_with_headings__start[i]] = j;
                 }
             }
@@ -278,8 +259,11 @@ public class PDFTableStripper extends PDFTextStripper
             double end_coord;
             int i;
 
+            // X AND Y HAVE BEEN INTER-CHANGED
             double[][] TableY1Y2 = new double[heading_found__start_pointer][2];
             double[][] TableX1X2 = new double[heading_found__start_pointer][2];
+            double[][][] TableXY = new double[heading_found__start_pointer][4][2];
+
             // Iterating through each pair of headings
             // i.e. iterating through all tables
             for (i =0; i<heading_found__start_pointer; i++) {
@@ -295,32 +279,43 @@ public class PDFTableStripper extends PDFTextStripper
                 PDPage pdPage = document.getPage(page);
                 Rectangle2D[][] regions = stripper.extractTable(pdPage);
                 row_coordinates = new double[stripper.getRows()];
-                row_heights = new double[stripper.getRows()];
-                row_page = new int[stripper.getRows()];
+//                row_heights = new double[stripper.getRows()];
+//                row_page = new int[stripper.getRows()];
 
                 for (int l = rows_with_headings__start[i]; l<=rows_with_headings__end[i]; l++){
                     row_in_table[l] = true;
                 }
-
+                TableY1Y2[i][0] = regions[0][rows_with_headings__start[i]].getMinX();
+//                TableX1X2[i][1] = regions[]
+//                for (int c = 0; c<highest_actual_num_of_col; c++){
+//                    if (row_column_wise_content[rows_with_headings__start[i]] == )
+//                }
+                double maxX = 0;
                 for (r = 0; r < stripper.getRows(); ++r) {
                     table_contents =  table_contents +  "r^^^^^^\n";
 
                     for (int c = 0; c < stripper.getColumns(); ++c) {
-                        System.out.println(c);
-
-                        System.out.println(r);
                         Rectangle2D region = regions[c][r];
-                        row_coordinates[r] = region.getMinY();
-                        row_heights[r] = region.getHeight();
-                        row_page[r] = page;
-                        System.out.println(stripper.getText(r,c));
+                        if (region.getMaxX()>maxX){
+                            maxX = region.getMaxX();
+                        }
+//                        System.out.println(stripper.getText(r,c));
                         table_contents = table_contents +  "\nc<<<>>>" + stripper.getText(r, c);
                     }
                 }
+                TableY1Y2[i][1] = maxX;
+
+                TableXY[i][0][0] = TableX1X2[i][0];
+                TableXY[i][0][1] = TableY1Y2[i][0];
+                TableXY[i][1][0] = TableX1X2[i][1];
+                TableXY[i][1][1] = TableY1Y2[i][0];
+                TableXY[i][2][0] = TableX1X2[i][0];
+                TableXY[i][2][1] = TableY1Y2[i][1];
+                TableXY[i][3][0] = TableX1X2[i][1];
+                TableXY[i][3][1] = TableY1Y2[i][1];
+
                 Tables[i] = table_contents;
-
             }
-
 
             // Preparing the Details object that has to be returned
             String Text = "";
@@ -342,25 +337,23 @@ public class PDFTableStripper extends PDFTextStripper
             }
 
             Details D = new Details();
-            D.Text = Text;
-            D.Tables = Tables;
-            D.Xcoordinates = Xcoordinates;
-            D.RowPartitions = RowPartitions;
+
+            // X AND Y HAVE BEEN INTERCHANGED
             D.TableVerticalCoord = TableX1X2;
+            D.TableHorizontCoord = TableY1Y2;
+            D.TableAllPoints = TableXY;
+            D.Tables = Tables;
 
             return D;
         }
-
     }
 
     private static class Details{
 
-        String Text;
         String[] Tables;
-        String Xcoordinates;
-        String RowPartitions;
         double[][] TableVerticalCoord; // Horizontal is same for even page, see : PART 1
-
+        double[][] TableHorizontCoord;
+        double[][][] TableAllPoints;
     }
 
 
